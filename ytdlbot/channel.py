@@ -38,7 +38,7 @@ class Channel(Payment):
         self.cur.execute("INSERT INTO subscribe values(%s,%s, NULL)", (user_id, channel_id))
         self.con.commit()
         logging.info("User %s subscribed channel %s", user_id, data["title"])
-        return "Subscribed to {}".format(data["title"])
+        return f'Subscribed to {data["title"]}'
 
     def unsubscribe_channel(self, user_id: int, channel_id: str) -> int:
         affected_rows = self.cur.execute(
@@ -111,7 +111,11 @@ class Channel(Payment):
         )
         data = requests.get(video_api).json()
         video_id = data["items"][0]["snippet"]["resourceId"]["videoId"]
-        logging.info(f"Latest video %s from %s", video_id, data["items"][0]["snippet"]["channelTitle"])
+        logging.info(
+            "Latest video %s from %s",
+            video_id,
+            data["items"][0]["snippet"]["channelTitle"],
+        )
         return f"https://www.youtube.com/watch?v={video_id}"
 
     def has_newer_update(self, channel_id: str) -> str:
@@ -135,10 +139,7 @@ class Channel(Payment):
             (user_id,),
         )
         data = self.cur.fetchall()
-        text = ""
-        for item in data:
-            text += "[{}]({}) `{}\n`".format(*item)
-        return text
+        return "".join("[{}]({}) `{}\n`".format(*item) for item in data)
 
     def group_subscriber(self) -> dict:
         # {"channel_id": [user_id, user_id, ...]}
@@ -169,11 +170,9 @@ class Channel(Payment):
     def del_cache(self, user_link: str) -> int:
         unique = self.extract_canonical_link(user_link)
         caches = self.r.hgetall("cache")
-        count = 0
-        for key in caches:
-            if key.startswith(unique):
-                count += self.del_send_cache(key)
-        return count
+        return sum(
+            self.del_send_cache(key) for key in caches if key.startswith(unique)
+        )
 
 
 if __name__ == "__main__":

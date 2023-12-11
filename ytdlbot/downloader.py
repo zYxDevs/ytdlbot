@@ -52,10 +52,7 @@ def edit_text(bot_msg, text: str):
 
 def tqdm_progress(desc, total, finished, speed="", eta=""):
     def more(title, initial):
-        if initial:
-            return f"{title} {initial}"
-        else:
-            return ""
+        return f"{title} {initial}" if initial else ""
 
     f = StringIO()
     tqdm(
@@ -88,12 +85,6 @@ def remove_bash_color(text):
 
 
 def download_hook(d: dict, bot_msg):
-    # since we're using celery, server location may be located in different continent.
-    # Therefore, we can't trigger the hook very often.
-    # the key is user_id + download_link
-    original_url = d["info_dict"]["original_url"]
-    key = f"{bot_msg.chat.id}-{original_url}"
-
     if d["status"] == "downloading":
         downloaded = d.get("downloaded_bytes", 0)
         total = d.get("total_bytes") or d.get("total_bytes_estimate", 0)
@@ -105,6 +96,12 @@ def download_hook(d: dict, bot_msg):
         eta = remove_bash_color(d.get("_eta_str", d.get("eta")))
         text = tqdm_progress("Downloading...", total, downloaded, speed, eta)
         edit_text(bot_msg, text)
+        # since we're using celery, server location may be located in different continent.
+        # Therefore, we can't trigger the hook very often.
+        # the key is user_id + download_link
+        original_url = d["info_dict"]["original_url"]
+        key = f"{bot_msg.chat.id}-{original_url}"
+
         r.set(key, "ok", ex=5)
 
 
@@ -152,9 +149,7 @@ def run_ffmpeg_progressbar(cmd_list: list, bm):
 
 
 def can_convert_mp4(video_path, uid):
-    if not ENABLE_FFMPEG:
-        return False
-    return True
+    return bool(ENABLE_FFMPEG)
 
 
 def ytdl_download(url: str, tempdir: str, bm, **kwargs) -> list:
@@ -236,11 +231,14 @@ def convert_audio_format(video_paths: list, bm):
             logging.info("%s is audio, default format, no need to convert", path)
         elif AUDIO_FORMAT is None and len(streams) >= 2:
             logging.info("%s is video, default format, need to extract audio", path)
-            audio_stream = {"codec_name": "m4a"}
-            for stream in streams:
-                if stream["codec_type"] == "audio":
-                    audio_stream = stream
-                    break
+            audio_stream = next(
+                (
+                    stream
+                    for stream in streams
+                    if stream["codec_type"] == "audio"
+                ),
+                {"codec_name": "m4a"},
+            )
             ext = audio_stream["codec_name"]
             new_path = path.with_suffix(f".{ext}")
             run_ffmpeg_progressbar(["ffmpeg", "-y", "-i", path, "-vn", "-acodec", "copy", new_path], bm)
@@ -268,7 +266,7 @@ def split_large_video(video_paths: list):
             os.remove(original_video)
 
     if split and original_video:
-        return [i for i in pathlib.Path(original_video).parent.glob("*")]
+        return list(pathlib.Path(original_video).parent.glob("*"))
 
 
 def download_instagram(url: str, tempdir: str):
@@ -324,8 +322,6 @@ def download_instagram(url: str, tempdir: str):
     return True
 
 
-if __name__ == "__main__":
-    pass
     # download_instagram("https://www.instagram.com/p/CXpxSyOrWCA/", "image")
     # download_instagram("https://www.instagram.com/p/Cah_7gnDVUW/", "video")
     # download_instagram("https://www.instagram.com/p/C0ozGsjtY0W/", "reels")

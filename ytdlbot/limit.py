@@ -45,16 +45,19 @@ class BuyMeACoffee:
     def _get_data(self, url):
         d = requests.get(url, headers={"Authorization": f"Bearer {self._token}"}).json()
         self._data.extend(d["data"])
-        next_page = d["next_page_url"]
-        if next_page:
+        if next_page := d["next_page_url"]:
             self._get_data(next_page)
 
     def _get_bmac_status(self, email: str) -> dict:
         self._get_data(self._url)
-        for user in self._data:
-            if user["payer_email"] == email or user["support_email"] == email:
-                return user
-        return {}
+        return next(
+            (
+                user
+                for user in self._data
+                if user["payer_email"] == email or user["support_email"] == email
+            ),
+            {},
+        )
 
     def get_user_payment(self, email: str) -> (int, "float", str):
         order = self._get_bmac_status(email)
@@ -89,12 +92,14 @@ class Afdian:
     def _get_afdian_status(self, trade_no: str) -> dict:
         req_data = self._generate_signature()
         data = requests.post(self._url, json=req_data).json()
-        # latest 50
-        for order in data["data"]["list"]:
-            if order["out_trade_no"] == trade_no:
-                return order
-
-        return {}
+        return next(
+            (
+                order
+                for order in data["data"]["list"]
+                if order["out_trade_no"] == trade_no
+            ),
+            {},
+        )
 
     def get_user_payment(self, trade_no: str) -> (int, float, str):
         order = self._get_afdian_status(trade_no)
@@ -180,13 +185,12 @@ class TronTrx:
 class Payment(Redis, MySQL):
     def check_old_user(self, user_id: int) -> tuple:
         self.cur.execute("SELECT * FROM payment WHERE user_id=%s AND old_user=1", (user_id,))
-        data = self.cur.fetchone()
-        return data
+        return self.cur.fetchone()
 
     def get_pay_token(self, user_id: int) -> int:
         self.cur.execute("SELECT token, old_user FROM payment WHERE user_id=%s", (user_id,))
         data = self.cur.fetchall() or [(0, False)]
-        number = sum([i[0] for i in data if i[0]])
+        number = sum(i[0] for i in data if i[0])
         if number == 0 and data[0][1] != 1:
             # not old user, no token
             logging.warning("User %s has no token, set download mode to Celery", user_id)
@@ -197,10 +201,9 @@ class Payment(Redis, MySQL):
     def get_free_token(self, user_id: int) -> int:
         if self.r.exists(user_id):
             return int(self.r.get(user_id))
-        else:
-            # set and return
-            self.r.set(user_id, FREE_DOWNLOAD, ex=EXPIRE)
-            return FREE_DOWNLOAD
+        # set and return
+        self.r.set(user_id, FREE_DOWNLOAD, ex=EXPIRE)
+        return FREE_DOWNLOAD
 
     def get_token(self, user_id: int):
         ttl = self.r.ttl(user_id)
@@ -236,8 +239,7 @@ class Payment(Redis, MySQL):
     def verify_payment(self, user_id: int, unique: str) -> str:
         pay = BuyMeACoffee() if "@" in unique else Afdian()
         self.cur.execute("SELECT * FROM payment WHERE payment_id=%s ", (unique,))
-        data = self.cur.fetchone()
-        if data:
+        if data := self.cur.fetchone():
             # TODO what if a user pay twice with the same email address?
             return (
                 f"Failed. Payment has been verified by other users. Please contact @{OWNER} if you have any questions."

@@ -13,7 +13,7 @@ from config import APP_HASH, APP_ID, PYRO_WORKERS, TOKEN, IPv6
 
 
 def create_app(session: str, workers: int = PYRO_WORKERS) -> Client:
-    _app = Client(
+    return Client(
         session,
         APP_ID,
         APP_HASH,
@@ -21,5 +21,3 @@ def create_app(session: str, workers: int = PYRO_WORKERS) -> Client:
         workers=workers,
         ipv6=IPv6,
     )
-
-    return _app

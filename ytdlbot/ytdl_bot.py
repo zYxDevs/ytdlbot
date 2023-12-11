@@ -77,11 +77,7 @@ def private_use(func):
             return
 
         # authorized users check
-        if AUTHORIZED_USER:
-            users = [int(i) for i in AUTHORIZED_USER.split(",")]
-        else:
-            users = []
-
+        users = [int(i) for i in AUTHORIZED_USER.split(",")] if AUTHORIZED_USER else []
         if users and chat_id and chat_id not in users:
             message.reply_text(BotText.private, quote=True)
             return
@@ -116,8 +112,7 @@ def start_handler(client: Client, message: types.Message):
     from_id = message.from_user.id
     logging.info("%s welcome to youtube-dl bot!", message.from_user.id)
     client.send_chat_action(from_id, "typing")
-    is_old_user = payment.check_old_user(from_id)
-    if is_old_user:
+    if is_old_user := payment.check_old_user(from_id):
         info = ""
     elif ENABLE_VIP:
         free_token, pay_token, reset = payment.get_token(from_id)
@@ -166,8 +161,7 @@ def unsubscribe_handler(client: Client, message: types.Message):
         client.send_message(chat_id, "/unsub channel_id", disable_web_page_preview=True)
         return
 
-    rows = channel.unsubscribe_channel(chat_id, text[1])
-    if rows:
+    if rows := channel.unsubscribe_channel(chat_id, text[1]):
         text = f"Unsubscribed from {text[1]}"
     else:
         text = "Unable to find the channel."
@@ -177,9 +171,9 @@ def unsubscribe_handler(client: Client, message: types.Message):
 @app.on_message(filters.command(["patch"]))
 def patch_handler(client: Client, message: types.Message):
     username = message.from_user.username
-    chat_id = message.chat.id
     if username == OWNER:
         celery_app.control.broadcast("hot_patch")
+        chat_id = message.chat.id
         client.send_chat_action(chat_id, "typing")
         client.send_message(chat_id, "Oorah!")
         hot_patch()
@@ -188,8 +182,8 @@ def patch_handler(client: Client, message: types.Message):
 @app.on_message(filters.command(["uncache"]))
 def uncache_handler(client: Client, message: types.Message):
     username = message.from_user.username
-    link = message.text.split()[1]
     if username == OWNER:
+        link = message.text.split()[1]
         count = channel.del_cache(link)
         message.reply_text(f"{count} cache(s) deleted.", quote=True)
 
@@ -219,8 +213,8 @@ def ping_handler(client: Client, message: types.Message):
 @app.on_message(filters.command(["sub_count"]))
 def sub_count_handler(client: Client, message: types.Message):
     username = message.from_user.username
-    chat_id = message.chat.id
     if username == OWNER:
+        chat_id = message.chat.id
         with BytesIO() as f:
             f.write(channel.sub_count().encode("u8"))
             f.name = "subscription count.txt"
@@ -277,7 +271,9 @@ def settings_handler(client: Client, message: types.Message):
         client.send_message(chat_id, BotText.settings.format(data[1], data[2]) + mode_text, reply_markup=markup)
     except:
         client.send_message(
-            chat_id, BotText.settings.format(data[1] + ".", data[2] + ".") + mode_text, reply_markup=markup
+            chat_id,
+            BotText.settings.format(f"{data[1]}.", f"{data[2]}.") + mode_text,
+            reply_markup=markup,
         )
 
 
@@ -469,7 +465,7 @@ def audio_callback(client: Client, callback_query: types.CallbackQuery):
         callback_query.message.reply_text("Audio conversion is disabled now.")
         return
 
-    callback_query.answer(f"Converting to audio...please wait patiently")
+    callback_query.answer("Converting to audio...please wait patiently")
     redis.update_metrics("audio_request")
     vmsg = callback_query.message
     audio_entrance(client, vmsg)
@@ -485,8 +481,7 @@ def owner_local_callback(client: Client, callback_query: types.CallbackQuery):
 def periodic_sub_check():
     exceptions = pyrogram.errors.exceptions
     for cid, uids in channel.group_subscriber().items():
-        video_url = channel.has_newer_update(cid)
-        if video_url:
+        if video_url := channel.has_newer_update(cid):
             logging.info(f"periodic update:{video_url} - {uids}")
             for uid in uids:
                 try:

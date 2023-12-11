@@ -65,9 +65,9 @@ def adjust_formats(user_id: int, url: str, formats: list, hijack=None):
         formats.insert(0, hijack)
         return
 
-    mapping = {"high": [], "medium": [720], "low": [480]}
     settings = MySQL().get_user_settings(user_id)
     if settings and is_youtube(url):
+        mapping = {"high": [], "medium": [720], "low": [480]}
         for m in mapping.get(settings[1], []):
             formats.insert(0, f"bestvideo[ext=mp4][height={m}]+bestaudio[ext=m4a]")
             formats.insert(1, f"bestvideo[vcodec^=avc][height={m}]+bestaudio[acodec^=mp4a]/best[vcodec^=avc]/best")
@@ -107,11 +107,8 @@ def get_revision():
 
 def get_func_queue(func) -> int:
     try:
-        count = 0
         data = getattr(inspect, func)() or {}
-        for _, task in data.items():
-            count += len(task)
-        return count
+        return sum(len(task) for _, task in data.items())
     except Exception:
         return 0
 

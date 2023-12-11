@@ -83,12 +83,11 @@ Sending format: **{1}**
     @staticmethod
     def get_receive_link_text() -> str:
         reserved = get_func_queue("reserved")
-        if ENABLE_CELERY and reserved:
-            text = f"Your tasks was added to the reserved queue {reserved}. Processing...\n\n"
-        else:
-            text = "Your task was added to active queue.\nProcessing...\n\n"
-
-        return text
+        return (
+            f"Your tasks was added to the reserved queue {reserved}. Processing...\n\n"
+            if ENABLE_CELERY and reserved
+            else "Your task was added to active queue.\nProcessing...\n\n"
+        )
 
     @staticmethod
     def ping_worker() -> str:
@@ -107,7 +106,7 @@ Sending format: **{1}**
             hostname = worker["tags"]["hostname"]
             status = {True: "✅"}.get(fields["status"], "❌")
             active = fields["active"]
-            load = "{},{},{}".format(fields["load1"], fields["load5"], fields["load15"])
+            load = f'{fields["load1"]},{fields["load5"]},{fields["load15"]}'
             rev = revision.get(hostname, "")
             text += f"{status}{hostname} **{active}** {load} {rev}\n"
 
