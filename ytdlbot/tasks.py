@@ -134,7 +134,7 @@ def forward_video(client, bot_msg, url: str):
 
     caption, _ = gen_cap(bot_msg, url, obj)
     res_msg.edit_text(caption, reply_markup=gen_video_markup())
-    bot_msg.edit_text(f"Download success!✅✅✅")
+    bot_msg.edit_text("Download success!✅✅✅")
     redis.update_metrics("cache_hit")
     return True
 
@@ -153,15 +153,14 @@ def ytdl_download_entrance(client: Client, bot_msg: types.Message, url: str, mod
             ytdl_normal_download(client, bot_msg, url)
     except Exception as e:
         logging.error("Failed to download %s, error: %s", url, e)
-        bot_msg.edit_text(f"Download failed!❌\n\n`{traceback.format_exc()[0:4000]}`", disable_web_page_preview=True)
+        bot_msg.edit_text(
+            f"Download failed!❌\n\n`{traceback.format_exc()[:4000]}`",
+            disable_web_page_preview=True,
+        )
 
 
 def direct_download_entrance(client: Client, bot_msg: typing.Union[types.Message, typing.Coroutine], url: str):
-    if ENABLE_CELERY:
-        direct_normal_download(client, bot_msg, url)
-        # direct_download_task.delay(bot_msg.chat.id, bot_msg.message_id, url)
-    else:
-        direct_normal_download(client, bot_msg, url)
+    direct_normal_download(client, bot_msg, url)
 
 
 def audio_entrance(client, bot_msg):
@@ -237,8 +236,7 @@ def normal_audio(client: Client, bot_msg: typing.Union[types.Message, typing.Cor
 
 
 def get_dl_source():
-    worker_name = os.getenv("WORKER_NAME")
-    if worker_name:
+    if worker_name := os.getenv("WORKER_NAME"):
         return f"Downloaded by  {worker_name}"
     return ""
 
@@ -249,7 +247,7 @@ def upload_transfer_sh(bm, paths: list) -> str:
     headers = {"Content-Type": monitor.content_type}
     try:
         req = requests.post("https://transfer.sh", data=monitor, headers=headers)
-        bm.edit_text(f"Download success!✅")
+        bm.edit_text("Download success!✅")
         return re.sub(r"https://", "\nhttps://", req.text)
     except requests.exceptions.RequestException as e:
         return f"Upload failed!❌\n\n```{e}```"
@@ -417,7 +415,7 @@ def gen_cap(bm, url, video_path):
     chat_id = bm.chat.id
     user = bm.chat
     try:
-        user_info = "@{}({})-{}".format(user.username or "N/A", user.first_name or "" + user.last_name or "", user.id)
+        user_info = f'@{user.username or "N/A"}({user.first_name or f"{user.last_name}" or ""})-{user.id}'
     except Exception:
         user_info = ""
 
@@ -436,10 +434,7 @@ def gen_cap(bm, url, video_path):
         )
     free = payment.get_free_token(chat_id)
     pay = payment.get_pay_token(chat_id)
-    if ENABLE_VIP:
-        remain = f"Download token count: free {free}, pay {pay}"
-    else:
-        remain = ""
+    remain = f"Download token count: free {free}, pay {pay}" if ENABLE_VIP else ""
     worker = get_dl_source()
     cap = (
         f"{user_info}\n{file_name}\n\n{url}\n\nInfo: {meta['width']}x{meta['height']} {file_size}\t"
@@ -449,7 +444,7 @@ def gen_cap(bm, url, video_path):
 
 
 def gen_video_markup():
-    markup = InlineKeyboardMarkup(
+    return InlineKeyboardMarkup(
         [
             [  # First row
                 InlineKeyboardButton(  # Generates a callback query when pressed
@@ -458,7 +453,6 @@ def gen_video_markup():
             ]
         ]
     )
-    return markup
 
 
 @Panel.register
@@ -475,11 +469,11 @@ def hot_patch(*args):
     pip_install = "pip install -r requirements.txt"
     unset = "git config --unset http.https://github.com/.extraheader"
     pull_unshallow = "git pull origin --unshallow"
-    pull = "git pull"
-
     subprocess.call(unset, shell=True, cwd=app_path)
     if subprocess.call(pull_unshallow, shell=True, cwd=app_path) != 0:
         logging.info("Already unshallow, pulling now...")
+        pull = "git pull"
+
         subprocess.call(pull, shell=True, cwd=app_path)
 
     logging.info("Code is updated, applying hot patch now...")
@@ -497,7 +491,10 @@ def async_task(task_name, *args):
     inspect = app.control.inspect()
     worker_stats = inspect.stats()
     route_queues = []
-    padding = math.ceil(sum([i["pool"]["max-concurrency"] for i in worker_stats.values()]) / len(worker_stats))
+    padding = math.ceil(
+        sum(i["pool"]["max-concurrency"] for i in worker_stats.values())
+        / len(worker_stats)
+    )
     for worker_name, stats in worker_stats.items():
         route = worker_name.split("@")[1]
         concurrency = stats["pool"]["max-concurrency"]

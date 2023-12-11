@@ -127,9 +127,7 @@ class Redis:
         db = MySQL()
         db.cur.execute("select user_id,payment_amount,old_user,token from payment")
         data = db.cur.fetchall()
-        fd = []
-        for item in data:
-            fd.append([item[0], item[1], item[2], item[3]])
+        fd = [[item[0], item[1], item[2], item[3]] for item in data]
         db_text = self.generate_table(["ID", "pay amount", "old user", "token"], fd)
 
         fd = []
@@ -148,20 +146,18 @@ class Redis:
         usage_text = self.generate_table(["UserID", "count"], fd)
 
         worker_data = InfluxDB.get_worker_data()
-        fd = []
-        for item in worker_data["data"]:
-            fd.append(
-                [
-                    item.get("hostname", 0),
-                    item.get("status", 0),
-                    item.get("active", 0),
-                    item.get("processed", 0),
-                    item.get("task-failed", 0),
-                    item.get("task-succeeded", 0),
-                    ",".join(str(i) for i in item.get("loadavg", [])),
-                ]
-            )
-
+        fd = [
+            [
+                item.get("hostname", 0),
+                item.get("status", 0),
+                item.get("active", 0),
+                item.get("processed", 0),
+                item.get("task-failed", 0),
+                item.get("task-succeeded", 0),
+                ",".join(str(i) for i in item.get("loadavg", [])),
+            ]
+            for item in worker_data["data"]
+        ]
         worker_text = self.generate_table(
             ["worker name", "status", "active", "processed", "failed", "succeeded", "Load Average"], fd
         )
@@ -275,9 +271,7 @@ class MySQL:
     def get_user_settings(self, user_id: int) -> tuple:
         self.cur.execute("SELECT * FROM settings WHERE user_id = %s", (user_id,))
         data = self.cur.fetchone()
-        if data is None:
-            return 100, "high", "video", "Celery"
-        return data
+        return (100, "high", "video", "Celery") if data is None else data
 
     def set_user_settings(self, user_id: int, field: str, value: str):
         cur = self.con.cursor()
@@ -285,12 +279,12 @@ class MySQL:
         data = cur.fetchone()
         if data is None:
             resolution = method = ""
-            if field == "resolution":
-                method = "video"
-                resolution = value
             if field == "method":
                 method = value
                 resolution = "high"
+            elif field == "resolution":
+                method = "video"
+                resolution = value
             cur.execute("INSERT INTO settings VALUES (%s,%s,%s,%s)", (user_id, resolution, method, "Celery"))
         else:
             cur.execute(f"UPDATE settings SET {field} =%s WHERE user_id = %s", (value, user_id))
@@ -312,9 +306,7 @@ class InfluxDB:
         token = base64.b64encode(f"{username}:{password}".encode()).decode()
         headers = {"Authorization": f"Basic {token}"}
         r = requests.get("https://celery.dmesg.app/dashboard?json=1", headers=headers)
-        if r.status_code != 200:
-            return dict(data=[])
-        return r.json()
+        return dict(data=[]) if r.status_code != 200 else r.json()
 
     def extract_dashboard_data(self):
         self.data = self.get_worker_data()
@@ -347,7 +339,7 @@ class InfluxDB:
         self.client.write_points(json_body)
 
     def __fill_overall_data(self):
-        active = sum([i["active"] for i in self.data["data"]])
+        active = sum(i["active"] for i in self.data["data"])
         json_body = [{"measurement": "active", "time": datetime.datetime.utcnow(), "fields": {"active": active}}]
         self.client.write_points(json_body)
 
